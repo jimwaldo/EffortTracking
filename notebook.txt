@@ -1,0 +1,19 @@
+Notes on the employee management system:
+
+The concur file has listings of all of the travel and expense
+reports that employees have submitted. Each report has a unique ID, the employee's name, the date of submission, the total amount requested for reimbursement, listed by the UUID of the
+expense report itself. The PI associated with the expense is listed in the
+employee Name field; the HUID will be in the Employee ID field unless the expense is
+charged to a group (like Privacy tools). Hypothesis is that
+we will treat the project as a separate employee/PI, but that should
+be confirmed with Scott.
+
+Not clear how to tell if an expense has been sent back, which is one of
+the measures requested. Need to ask Scott. Similarly, it is not clear
+how to tell if something is a travel expense-- there may be a set of descriptions
+that indicate this, or there may be a set of codes. Need to check.
+
+Decided to make the set of travel categories something that gets read
+in from a config file, so that it can be updated without code changes. The
+config file will be a csv file, so it can be edited with a spreadsheet
+program.
