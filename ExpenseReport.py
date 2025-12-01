@@ -13,9 +13,11 @@ header_row_c = 23
 
 output_header = [
     'PI/Lab',
+    'PI Name',
     'Number of Reports',
     'Number of Line Items',
     'Average Lines per Report',
+    "Total Expenses",
     'Number of Travel Reports',
     'Number of Catering Reports'
 ]
@@ -35,8 +37,9 @@ def read_travel_cat(csv_file):
     return ret_set
 
 class ExpenseReport:
-    def __init__(self, report_id, employee_name, amount, date, description):
+    def __init__(self, report_id, root_num, employee_name, amount, date, description):
         self.report_id = report_id
+        self.root_num = root_num
         self.employee_name = employee_name
         self.amount = amount
         self.date = date
@@ -53,20 +56,21 @@ class ExpenseReport:
                 f"description='{self.description}')")
 
 
-class PI:
-    def __init__(self, pi_id, name, expense):
-        self.pi_id = pi_id
-        self.name = name
-        self.expense_l = [expense]
-
-    def __repr__(self):
-        return (f"PI(pi_id={self.pi_id}, "
-                f"name='{self.name}', "
-                f"expenses ='{self.expense_l}')")
+# class PI:
+#     def __init__(self, pi_id, name, expense):
+#         self.pi_id = pi_id
+#         self.name = name
+#         self.expense_l = [expense]
+#
+#     def __repr__(self):
+#         return (f"PI(pi_id={self.pi_id}, "
+#                 f"name='{self.name}', "
+#                 f"expenses ='{self.expense_l}')")
 
 class PI_Expense_Summary:
-    def __init__(self, name, expense):
-        self.name = name
+    def __init__(self, root, pi_name, expense):
+        self.root = root
+        self.pi_name = pi_name
         self.expense_ct = 1
         self.lines = expense.num_lines
         self.amount = expense.amount
@@ -90,17 +94,32 @@ class PI_Expense_Summary:
         return None
 
     def summary_output(self):
-        out_line = [self.name,
+        out_line = [self.root,
+                    self.pi_name,
                     self.expense_ct,
                     self.lines,
-                    self.lines/self.expense_ct,
+                    "{:.2f}".format(self.lines/self.expense_ct),
+                    "{:.2f}".format(self.amount),
                     self.travel_ct,
                     self.catering_ct
                     ]
         return out_line
 
 
-
+def make_root_2_pi_d(infile):
+    '''
+    read a csv file, skipping the first line as a header, then build a dictionary from the root code to the PI name,
+    where the code is the first field and the PI name is the second field
+    :param infile: path to a csv file
+    :return: dictionary with root code as key and PI name as value
+    '''
+    ret_d = dict()
+    with open(infile) as file:
+        csv_r = csv.reader(file)
+        l = next(csv_r)
+        for l in csv_r:
+            ret_d[l[0]] = l[1]
+    return ret_d
 
 def convert_string_to_float(num_string):
     '''takes a string that might contain commas and converts to a float
@@ -117,6 +136,13 @@ def convert_string_to_float(num_string):
         return float(num_string.replace(',', ''))
 
 def make_expense_dict(expenses_line_list, travel_line_list):
+    '''
+    Create a dictionary, indexed by expense report ID with value and ExpenseReport object, that will
+    track the number of lines, the total amount, and whether or not the expense report was a travel expense report.
+    :param expenses_line_list:
+    :param travel_line_list:
+    :return: A dictionary of [expense_id, ExpenseReport]
+    '''
     expense_dict: dict[str, ExpenseReport] = {}
     for line in expenses_line_list:
         if line[1] in expense_dict:
@@ -125,7 +151,7 @@ def make_expense_dict(expenses_line_list, travel_line_list):
             expense.amount += convert_string_to_float(line[16])
 
         else:
-            expense_dict[line[1]] = ExpenseReport(line[1], line[4], convert_string_to_float(line[16]), line[0], line[2])
+            expense_dict[line[1]] = ExpenseReport(line[1], line[12], line[4], convert_string_to_float(line[16]), line[0], line[2])
         if line[13] in travel_line_list:
             expense_dict[line[1]].travel = (True)
         if 'Catering' in line[13]:
@@ -134,6 +160,13 @@ def make_expense_dict(expenses_line_list, travel_line_list):
     return expense_dict
 
 def process_concur_file(concur_file, travel_file):
+   '''
+   Read a concur file, and a file with the categories that are considered travel expenses, and
+   create a dictionary indexed by expense report number with values ExpenseReports objects
+   :param concur_file:
+   :param travel_file:
+   :return:
+   '''
    travel_cat = read_travel_cat(travel_file)
    with open(concur_file) as file:
        csv_r = csv.reader(file)
@@ -142,8 +175,9 @@ def process_concur_file(concur_file, travel_file):
        return expense_dict
 
 
-def make_employee_dict(expense_dict):
-    """Creates a dictionary of expense reports grouped by employee name.
+def make_employee_dict(expense_dict, root_2_pi_dict):
+    """Creates a dictionary of expense reports grouped by the root number associated with the PI for whom the
+    expense report was submitted.
 
     Args:
         expense_dict: Dictionary of expense reports indexed by report ID
@@ -153,20 +187,25 @@ def make_employee_dict(expense_dict):
     """
     employee_dict: dict[str, PI_Expense_Summary] = {}
     for expense in expense_dict.values():
-        if expense.employee_name not in employee_dict:
-            employee_dict[expense.employee_name] = PI_Expense_Summary(expense.employee_name, expense)
+        if expense.root_num not in employee_dict:
+            if expense.root_num in root_2_pi_dict:
+                pi_name = root_2_pi_dict[expense.root_num]
+            else:
+                pi_name = 'Uncategorized'
+            employee_dict[expense.root_num] = PI_Expense_Summary(expense.root_num, pi_name, expense)
         else:
-            employee_dict[expense.employee_name].update(expense)
+            employee_dict[expense.root_num].update(expense)
 
     return employee_dict
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Usage: python ExpenseReport.py <concur_file> <travel_file>")
+    if len(sys.argv) != 4:
+        print("Usage: python ExpenseReport.py <concur_file> <travel_file> <root_to_pi_file>")
         sys.exit(1)
 
     expense_dict = process_concur_file(sys.argv[1], sys.argv[2])
-    employee_dict = make_employee_dict(expense_dict)
+    root_2_pi_d = make_root_2_pi_d(sys.argv[3])
+    employee_dict = make_employee_dict(expense_dict, root_2_pi_d)
     summary_l = list(employee_dict.values())
 
     with open('output.csv', 'w', newline='') as csvfile:

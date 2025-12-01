@@ -1,5 +1,14 @@
 Notes on the employee management system:
 
+11/16/26
+
+Rather than key and cluster the expense reports by employee name, we are going to try to cluster and
+index by PI as determined by the root number. This will map to a PI using the PI Root Data file, which maps
+from root number to PI name. Note that there are around 5k expense reports that do not have a real root number
+associated with them; we will deal with them separately.
+
+So the first thing needed is to change the expense report object to include the root number,
+
 The concur file has listings of all of the travel and expense
 reports that employees have submitted. Each report has a unique ID, the employee's name, the date of submission, the total amount requested for reimbursement, listed by the UUID of the
 expense report itself. The PI associated with the expense is listed in the

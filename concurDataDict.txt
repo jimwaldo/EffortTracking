@@ -1,0 +1,21 @@
+The Concur dump file has 22 lines that are mostly filler, followed by a single line of heading
+information, followed by the data. The headers, along with indexes, are
+0: 'Effective Date',
+1: 'Expense Report ID',
+2: 'Expense Report Name',
+3: 'Employee ID',
+4: 'Employee Name',
+5: 'Expense Payment Mode',
+6: 'Tub',
+7: 'Org',
+8: 'Object',
+9: 'Fund',
+10: 'Activity',
+11 'Subactivity',
+12: 'Root',
+13: 'Expense Type',
+14: 'Business Purpose',
+15: 'Expense Transaction Date',
+16: 'CoA Allocated ($)']
+
+Different lines of the same expense report will have the same Expense Report ID.
