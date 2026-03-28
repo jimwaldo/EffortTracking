@@ -6,8 +6,9 @@ Created on 10/13/25
 @author waldo
 
 """
-import csv, sys
+import csv, sys, os, tempfile
 from typing import Any
+import pandas as pd
 
 header_row_c = 23
 
@@ -68,6 +69,9 @@ class ExpenseReport:
 #                 f"expenses ='{self.expense_l}')")
 
 class PI_Expense_Summary:
+    '''
+    Class used to aggregate expense reports for a PI, identified by the root number associated with the PI
+    '''
     def __init__(self, root, pi_name, expense):
         self.root = root
         self.pi_name = pi_name
@@ -104,6 +108,35 @@ class PI_Expense_Summary:
                     self.catering_ct
                     ]
         return out_line
+
+
+def extract_name(line):
+    """
+    Extract name by removing prefix up to first '^' and everything us to the space before the
+     first number
+    Args:
+        line: input string
+    Returns:
+        processed string
+    """
+    if not line or '^' not in line:
+        return line
+
+    # Find position after second ^
+    first_caret = line.find('^')
+    if first_caret == -1:
+        return line
+
+    # Remove prefix up to second ^
+    name = line[first_caret + 1:]
+
+    # Remove everything after the space before the first number
+    for i, c in enumerate(name):
+        if c.isdigit():
+            name = name[:i-1]
+            break
+
+    return name.strip()
 
 
 def make_root_2_pi_d(infile):
@@ -187,30 +220,48 @@ def make_employee_dict(expense_dict, root_2_pi_dict):
     """
     employee_dict: dict[str, PI_Expense_Summary] = {}
     for expense in expense_dict.values():
-        if expense.root_num not in employee_dict:
-            if expense.root_num in root_2_pi_dict:
-                pi_name = root_2_pi_dict[expense.root_num]
-            else:
-                pi_name = 'Uncategorized'
-            employee_dict[expense.root_num] = PI_Expense_Summary(expense.root_num, pi_name, expense)
+        if expense.root_num in root_2_pi_dict:
+            emp_key = expense.root_num
+            pi_name = root_2_pi_dict[expense.root_num]
         else:
-            employee_dict[expense.root_num].update(expense)
+            emp_key = expense.root_num + expense.employee_name
+            pi_name = expense.employee_name
+
+        if emp_key not in employee_dict:
+            employee_dict[emp_key] = PI_Expense_Summary(expense.root_num, pi_name, expense)
+        else:
+            employee_dict[emp_key].update(expense)
 
     return employee_dict
+
+def excel_to_csv(excel_path):
+    '''Convert an Excel file to a temporary CSV file, returning the temp file path.'''
+    df = pd.read_excel(excel_path, header=None)
+    tmp = tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False)
+    tmp.close()
+    df.to_csv(tmp.name, index=False, header=False)
+    return tmp.name
+
 
 if __name__ == "__main__":
     if len(sys.argv) != 4:
         print("Usage: python ExpenseReport.py <concur_file> <travel_file> <root_to_pi_file>")
         sys.exit(1)
 
-    expense_dict = process_concur_file(sys.argv[1], sys.argv[2])
-    root_2_pi_d = make_root_2_pi_d(sys.argv[3])
-    employee_dict = make_employee_dict(expense_dict, root_2_pi_d)
-    summary_l = list(employee_dict.values())
+    concur_csv = excel_to_csv(sys.argv[1])
+    travel_csv = excel_to_csv(sys.argv[2])
+    try:
+        expense_dict = process_concur_file(concur_csv, travel_csv)
+        root_2_pi_d = make_root_2_pi_d(sys.argv[3])
+        employee_dict = make_employee_dict(expense_dict, root_2_pi_d)
+        summary_l = list(employee_dict.values())
 
-    with open('output.csv', 'w', newline='') as csvfile:
-        csv_writer = csv.writer(csvfile)
-        csv_writer.writerow(output_header)
-        for summary in summary_l:
-            csv_writer.writerow(summary.summary_output())
+        with open('output.csv', 'w', newline='') as csvfile:
+            csv_writer = csv.writer(csvfile)
+            csv_writer.writerow(output_header)
+            for summary in summary_l:
+                csv_writer.writerow(summary.summary_output())
+    finally:
+        os.unlink(concur_csv)
+        os.unlink(travel_csv)
 
